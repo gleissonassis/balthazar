@@ -1,0 +1,24 @@
+{
+  "name": "balthazar",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gleissonassis/balthazar.git"
+  },
+  "author": "Gleisson de Assis <gleisson.assis@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/gleissonassis/balthazar/issues"
+  },
+  "homepage": "https://github.com/gleissonassis/balthazar#readme",
+  "dependencies": {
+    "locks": "^0.2.2",
+    "mysql": "^2.12.0",
+    "promise": "^7.1.1"
+  }
+}
