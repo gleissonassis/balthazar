@@ -1,48 +1,26 @@
+var Promise       = require('promise');
 
-var connection = require('../config/mysql');
-var Promise = require('promise');
-
-function WordBO() {
+function WordBO(dao) {
   return {
-    getWordsList: function() {
-      return new Promise(function(resolve, reject) {
-        connection.query('SELECT * FROM Word ORDER BY word', function(err, rows, fields) {
-            if (err) {
-              reject(err);
-            } else {
-              var list = [];
-
-              for (var i in rows) {
-                  list.push(rows[i]);
-              }
-
-              resolve(list);
-            }
-        });
-      });
+    getDictionary: function(systemInfoId, language) {
+      return dao.getDictionary(systemInfoId, language);
     },
 
     saveWord: function(word) {
-      return new Promise(function(resolve, reject) {
-        connection.query('INSERT INTO Word SET ?', {word: word.toLowerCase()}, function(err, result) {
-            if (err) {
-              reject(err);
-            } else {
-              resolve({
-                word: word,
-                id: result.insertId
-              });
-            }
-          });
-      });
+      return dao.saveWord(word);
     },
 
-    saveWords: function(words) {
+    saveDictionary: function(dictionary, systemInfoId, language) {
+      var self = this;
       var p = [];
 
-      for(var i in words) {
-        p.push(this.saveWord(words[i]));
-      }
+      dictionary.forEach(function(word) {
+        p.push(self.saveWord({
+          word: word,
+          language: language,
+          systemInfoId: systemInfoId
+        }));
+      });
 
       return Promise.all(p);
     }

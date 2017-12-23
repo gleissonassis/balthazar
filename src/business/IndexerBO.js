@@ -1,19 +1,15 @@
-
-var connection = require('../config/mysql');
-var StopWordBO = require('./StopWordBO');
-var DocumentBO = require('./DocumentBO');
-var SystemInfoBO = require('./SystemInfoBO');
-var WordBO = require('./WordBO');
-var Promise = require('promise');
-var locks = require('locks');
+var Promise         = require('promise');
+var locks           = require('locks');
+var logger          = require('../config/logger');
+var crypto          = require('crypto');
 
 var mutex = locks.createMutex();
 
-function IndexerBO() {
-  var wordBO = new WordBO();
-  var stopWordBO = new StopWordBO();
-  var documentBO = new DocumentBO();
-  var systemInfoBO = new SystemInfoBO();
+function IndexerBO(dependencies) {
+  var dao = dependencies.dao;
+  var wordBO = dependencies.wordBO;
+  var documentBO = dependencies.documentBO;
+  var stopWordBO = dependencies.stopWordBO;
 
   return {
     parseDocument: function(document, stopWords) {
@@ -27,12 +23,12 @@ function IndexerBO() {
       var list = [];
       var index = 0;
 
-      for(var i in words) {
+      for (var i in words) {
         var length = stopWords.filter(function(item) {
-          return item.word && words[i] && item.word === words[i]
+          return item.word === words[i];
         }).length;
 
-        if(length === 0 && words[i].trim().length > 0) {
+        if (length === 0 && words[i].trim().length > 0) {
           list.push({
             word: words[i],
             position: index
@@ -46,130 +42,170 @@ function IndexerBO() {
     },
 
     clearIndexing: function(documentId) {
-      return new Promise(function(resolve, reject) {
-        connection.query('DELETE FROM `Index` WHERE documentId = ?', [documentId], function(err, result) {
-            if (err) {
-              reject(err);
-            } else {
-              resolve();
-            }
-          });
-      });
+      return dao.clearIndexing(documentId);
     },
 
     saveIndexing: function(index) {
-      var p = [];
-
-      for(var i in index) {
-        p.push(new Promise(function(resolve, reject) {
-          connection.query('INSERT INTO `Index` SET ?', {
-            wordId: index[i].wordId,
-            position: index[i].position,
-            documentId: index[i].documentId
-          }, function(err, result) {
-              if (err) {
-                reject(err);
-              } else {
-                index[i].id = result.insertId;
-                resolve(index[i]);
-              }
-            });
-        }));
-      }
-
-      return Promise.all(p);
+      return dao.saveIndexing(index);
     },
 
-    createIndexing: function(document, contents) {
-      return new Promise((resolve, reject) => {
+    buildIndex: function(document) {
+      var self = this;
+
+      return new Promise(function(resolve, reject){
         var stopWords = [];
-        var words = [];
+        var dictionary = [];
         var index = [];
-        var systemInfo = null;
 
-        mutex.timedLock(1000,(error) => {
-          if (error) {
-            reject(new Error('Could not get the lock within 1 seconds, so gave up'));
-          } else {
-            var chain = Promise.resolve();
+        //calculating the hash for this document in order to prevent
+        //build a index for a document that already exists in the database
+        var data = document.title + ' ' + document.contents;
+        document.hash = crypto.createHash('md5').update(data).digest('hex');
 
-            chain
-            .then(() => {
-              return stopWordBO.getAll()
-            })
-            .then((result) => {
-              stopWords = result;
-              return wordBO.getWordsList();
-            })
-            .then((result) => {
-              newWords = [];
-              words = result;
+        documentBO.getByRefUrlHash(document.systemInfoId,
+          document.reference,
+          document.url,
+          document.hash)
+          .then(function(d) {
+            if (d) {
+              resolve({
+                document: d,
+                index: []
+              });
+              logger.info('The index for this document already exists. The processing will be ignored');
+            } else {
+              //index a document must be a synchronized process, because is necessary
+              //to get the stop words and the dictionary from the database, parse the
+              //document in order to check if new words must be added to the dictionary
+              //and finally update the dictionary. Concorrent process can not do all
+              //these steps at the same time.
+              logger.info('Request a lock to index the document');
+              mutex.lock(function() {
+                var chain = Promise.resolve();
 
-              index = this.parseDocument(document.title + ' ' + contents, stopWords);
+                logger.info('Starting the chain to index the document');
+                logger.info(data);
 
-              var uniqueIndex = [];
+                chain
+                .then(function(){
+                  logger.info('Getting all the stop words for the language ', document.language);
+                  return stopWordBO.getAll(document.language);
+                })
+                .then(function(result){
+                  logger.info(result);
 
-              for(var i in index) {
-                if(uniqueIndex.indexOf(index[i].word) === -1) {
-                  uniqueIndex.push(index[i].word);
-                }
-              }
+                  stopWords = result;
 
-              for(var i in uniqueIndex) {
-                var exists = words.filter((item) => {
-                  return item.word === uniqueIndex[i];
-                }).length;
+                  logger.info('Getting all the words in the dictionary for the language ', document.language);
+                  return wordBO.getDictionary(document.systemInfoId, document.language);
+                })
+                .then(function(result){
+                  logger.info(result);
 
-                //if the word does not exist int the words list it will be
-                //put in the newWords list in order to be saved
-                if(exists === 0){
-                  console.log(uniqueIndex[i]);
-                  newWords.push(uniqueIndex[i]);
-                }
-              }
+                  newWords = [];
+                  dictionary = result;
 
-              return wordBO.saveWords(newWords);
-            })
-            .then((result) => {
-              //at this point the code is not necessary to be synchronized, then
-              //the mutex will be unlocked
-              mutex.unlock();
+                  logger.info('Parsing the document and extracting the index. ');
+                  logger.info('Data', data);
+                  index = self.parseDocument(data, stopWords);
+                  logger.info('Index', index);
 
-              words = words.concat(result);
+                  var uniqueIndex = [];
 
-              return systemInfoBO.createSystemInfoById(document.systemInfoId);
-            })
-            .then((result) => {
-              return documentBO.saveDocument(document);
-            })
-            .then((result) => {
-              document.id = result.id;
-              return this.clearIndexing(document.id);
-            })
-            .then(() => {
-              //associating a word from the document to a word from the database
-              //and its document
-              for(var i in index) {
-                if(index[i].word.trim().length > 0) {
-                  var selectedWord = words.filter((item) => {
-                    return item.word === index[i].word;
+                  //removing repeated words from the extracted index
+                  index.forEach(function(element) {
+                    if (uniqueIndex.indexOf(element.word) === -1) {
+                      uniqueIndex.push(element.word);
+                    }
                   });
 
-                  index[i].wordId = selectedWord[0].id;
-                  index[i].documentId = document.id;
-                }
-              }
+                  //adding to newWords array the words needed to be persisted
+                  uniqueIndex.forEach(function(element) {
+                    var exists = dictionary.filter(function(item){
+                      return item.word === element;
+                    }).length;
 
-              return this.saveIndexing(index);
-            })
-            .then(resolve)
-            .catch((error) => {
-              mutex.unclock();
-              reject(error);
-            });
-          }
-        });
+                    //if the word does not exist in the words list it will be
+                    //put in the newWords list to be saved
+                    if (exists === 0){
+                      console.log(element);
+                      newWords.push(element);
+                    }
+                  });
 
+                  if (newWords.length) {
+                    logger.info('Saving the new words to the dictionary for the language ',
+                      newWords,
+                      document.systemInfoId,
+                      document.language);
+                    return wordBO.saveDictionary(newWords, document.systemInfoId, document.language);
+                  } else {
+                    logger.info('There is no word to be saved. All the words in the document are indexed');
+                    return [];
+                  }
+                })
+                .then(function(result){
+                  logger.info('Releasing the lock. The next steps can be asynchronous');
+                  //at this point the code is not necessary to be synchronized, then
+                  //the mutex will be unlocked
+                  mutex.unlock();
+
+                  logger.info(result);
+
+                  dictionary = dictionary.concat(result);
+                  logger.info('New dictionary ', dictionary);
+
+                  logger.info('Saving the document', document);
+                  return documentBO.saveDocument(document);
+                })
+                .then(function(result) {
+                  document.id = result.id;
+                  logger.info('Clearing the existing document index');
+                  return self.clearIndexing(document.id);
+                })
+                .then(function() {
+                  logger.info('Indexing the document based on the dictionary for the language ',
+                    document.language,
+                    index,
+                    dictionary);
+
+                  //associating a word from the document to a word from the database
+                  //and its document
+                  index.forEach(function(element) {
+                    if (element.word.trim().length > 0) {
+                      //getting the word reference from the dictionary
+                      var selectedWord = dictionary.filter(function(item){
+                        return item.word === element.word;
+                      });
+
+                      element.wordId = selectedWord[0].id;
+                      element.documentId = document.id;
+
+                      //removing unnecessary properties
+                      delete element.word;
+                      delete element.systemInfoId;
+                    }
+                  });
+
+                  logger.info('New index after parsing ');
+                  logger.info(index);
+
+                  return self.saveIndexing(index);
+                })
+                .then(function(result) {
+                  logger.info('The process has finished. The index to the document has been created',
+                    document,
+                    result);
+                  resolve({document: document, index: result});
+                })
+                .catch(function(error){
+                  logger.error('An error has occurred in the chain. ', error);
+                  mutex.unlock();
+                  reject(error);
+                });
+              });
+            }
+          });
       });
     }
   };

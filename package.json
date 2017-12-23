@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "istanbul cover --reporter=html ./node_modules/mocha/bin/_mocha -- -R spec --recursive"
   },
   "repository": {
     "type": "git",
@@ -16,6 +17,13 @@
     "url": "https://github.com/gleissonassis/balthazar/issues"
   },
   "homepage": "https://github.com/gleissonassis/balthazar#readme",
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "eslint": "4.6.1",
+    "istanbul": "0.4.5",
+    "mocha": "3.5.3",
+    "sinon": "3.3.0"
+  },
   "dependencies": {
     "locks": "^0.2.2",
     "mysql": "^2.12.0",

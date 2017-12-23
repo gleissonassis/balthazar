@@ -1,71 +1,40 @@
-var connection = require('../config/mysql');
-var Promise = require('promise');
+var Promise     = require('promise');
 
-function DocumentBO() {
+function DocumentBO(dao) {
   return {
     createDocument: function(document) {
-      return new Promise(function(resolve, reject) {
-        connection.query('INSERT INTO Document SET ?', document, function(err, result) {
-            if (err) {
-              reject(err);
-            } else {
-              document.id = result.insertId;
-              resolve(document);
-            }
-          });
-      });
+      return dao.createDocument(document);
     },
 
     updateDocument: function(document) {
-      return new Promise(function(resolve, reject) {
-        connection.query('UPDATE Document SET SystemInfoId = ?, Title = ?, Reference = ?, Url = Url, CreatedAt = ?, CreatedBy = ?, ModifiedAt = ?, ModifiedBy = ? WHERE Id = ?', [
-          document.systemInfoId,
-          document.title,
-          document.reference,
-          document.url,
-          document.createAt,
-          document.createdBy,
-          document.modifiedAt,
-          document.modifiedBy,
-          document.id
-        ], function(err, result) {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(document);
-            }
-          });
-      });
+      return dao.updateDocument(document);
     },
 
     getByRefAndUrl: function(systemInfoId, reference, url) {
-      return new Promise(function(resolve, reject) {
-        connection.query('SELECT * FROM Document WHERE systemInfoId = ? AND reference = ? AND url = ?',
-        [systemInfoId, reference, url],
-        function(err, result) {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(result && result.length ? result[0] : null);
-            }
-          });
-      });
+      return dao.getByRefAndUrl(systemInfoId, reference, url);
+    },
+
+    getByRefUrlHash: function(systemInfoId, reference, url, hash) {
+      return dao.getByRefUrlHash(systemInfoId, reference, url, hash);
     },
 
     saveDocument: function(document) {
-      return new Promise((resolve, reject) => {
+      var self = this;
+      return new Promise(function(resolve, reject) {
         var chain = Promise.resolve();
 
         chain
-          .then(() => {
-            return this.getByRefAndUrl(document.systemInfoId, document.reference, document.url);
+          .then(function() {
+            console.log(document.systemInfoId, document.reference, document.url);
+            return self.getByRefAndUrl(document.systemInfoId, document.reference, document.url);
           })
-          .then((r) => {
-            if(r) {
+          .then(function(r) {
+            console.log(r);
+            if (r) {
               document.id = r.id;
-              return this.updateDocument(document);
+              return self.updateDocument(document);
             } else {
-              return this.createDocument(document);
+              return self.createDocument(document);
             }
           })
           .then(resolve)
