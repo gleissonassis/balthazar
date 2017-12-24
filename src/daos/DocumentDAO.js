@@ -90,27 +90,44 @@ function DocumentDAO() {
       });
     },
 
-    searchDocuments: function(systemInfoId, q) {
-      var self = this;
-
+    calculateSoundexAndPhonem: function(words) {
       return new Promise(function(resolve, reject) {
-        var words = q.split(' ');
-
         var query = '';
 
         words.forEach(function(word, index) {
-          /*query += ' AND ('+
-                   'W.word LIKE ' + connection.escape('%' + word + '%') + ' ' +
-                   ' OR '+
-                   ' W.phonem = ' +
-                   'IF(W.language=\'pt-br\', '+
-                   'phonembr(' + connection.escape(word) + '), SOUNDEX(' + connection.escape(word) + ')))';*/
-         if (index > 0) {
+          if (index > 0) {
+            query += ' UNION ALL ';
+          }
+          query += 'SELECT ' + connection.escape(word) + ' as word, '+
+                    'SOUNDEX(' + connection.escape(word) + ') as soundex, ' +
+                    'phonembr(' + connection.escape(word) + ') as phonem';
+        });
+
+        connection.query(query,
+          function(err, result) {
+            if (err) {
+              reject(connection.parseError(err));
+            } else {
+              resolve(result);
+            }
+          }
+        );
+      });
+    },
+
+    getDocumentsByWords: function(words) {
+      return new Promise(function(resolve, reject) {
+        var query = '';
+
+        words.forEach(function(word, index) {
+          if (index > 0) {
            query += ' UNION ALL ';
-         }
-         query += 'SELECT DISTINCT I.documentId, ' + connection.escape('%' + word + '%') + ' as word ' +
-                     'FROM Word W INNER JOIN `Index` I ON I.wordId = W.id ' +
-                     'WHERE W.word LIKE '+ connection.escape('%' + word + '%');
+          }
+          query += 'SELECT DISTINCT I.documentId, ' + connection.escape('%' + word.word + '%') + ' as word ' +
+                   'FROM Word W INNER JOIN `Index` I ON I.wordId = W.id ' +
+                   'WHERE W.word LIKE ' + connection.escape('%' + word.word + '%') + ' ' +
+                   ' OR W.phonem = IF(W.language = \'pt-br\', ' + connection.escape(word.phonem) + ', ' +
+                   '' + connection.escape(word.soundex) + ')';
         });
 
         connection.query(query,
@@ -126,11 +143,27 @@ function DocumentDAO() {
                   }));
                 }
 
-                self.getByIds(_.intersection.apply(_, a))
-                  .then(resolve)
-                  .catch(reject);
+                resolve(_.intersection.apply(_, a));
               }
             });
+      });
+    },
+
+    searchDocuments: function(systemInfoId, q) {
+      var self = this;
+
+      return new Promise(function(resolve, reject) {
+        var words = q.split(' ');
+
+        self.calculateSoundexAndPhonem(words)
+          .then(function(r) {
+            return self.getDocumentsByWords(r);
+          })
+          .then(function(r) {
+            return self.getByIds(r);
+          })
+          .then(resolve)
+          .catch(reject);
       });
     },
 
