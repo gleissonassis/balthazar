@@ -23,8 +23,19 @@ function WordDAO() {
       return new Promise(function(resolve, reject) {
 
         logger.info('Saving a new word', word);
+        var q = 'INSERT INTO Word SET word = ?, language = ?, phonem = SOUNDEX(?), systemInfoId = ?';
 
-        connection.query('INSERT INTO Word SET ?', word, function(err, result) {
+        if (word.language === 'pt-br') {
+          q = q.replace('SOUNDEX', 'phonembr');
+        }
+
+        connection.query(q,
+        [
+          word.word,
+          word.language,
+          word.word,
+          word.systemInfoId
+        ], function(err, result) {
             if (err) {
               logger.error('An error has occurred while saving a new word', err);
               reject(err);

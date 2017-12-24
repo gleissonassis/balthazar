@@ -2,6 +2,10 @@ var Promise     = require('promise');
 
 function DocumentBO(dao) {
   return {
+    getAllByGroup: function(systemInfoId, group) {
+      return dao.getAllByGroup(systemInfoId, group);
+    },
+
     createDocument: function(document) {
       return dao.createDocument(document);
     },
@@ -10,12 +14,20 @@ function DocumentBO(dao) {
       return dao.updateDocument(document);
     },
 
-    getByRefAndUrl: function(systemInfoId, reference, url) {
-      return dao.getByRefAndUrl(systemInfoId, reference, url);
+    getByReference: function(systemInfoId, group, reference) {
+      return dao.getByReference(systemInfoId, group, reference);
     },
 
-    getByRefUrlHash: function(systemInfoId, reference, url, hash) {
-      return dao.getByRefUrlHash(systemInfoId, reference, url, hash);
+    getByHash: function(systemInfoId, group, reference, hash) {
+      return dao.getByHash(systemInfoId, group, reference, hash);
+    },
+
+    getById: function(id) {
+      return dao.getById(id);
+    },
+
+    searchDocuments: function(systemInfoId, query) {
+      return dao.searchDocuments(systemInfoId, query);
     },
 
     saveDocument: function(document) {
@@ -25,8 +37,7 @@ function DocumentBO(dao) {
 
         chain
           .then(function() {
-            console.log(document.systemInfoId, document.reference, document.url);
-            return self.getByRefAndUrl(document.systemInfoId, document.reference, document.url);
+            return self.getByReference(document.systemInfoId, document.group, document.reference);
           })
           .then(function(r) {
             console.log(r);

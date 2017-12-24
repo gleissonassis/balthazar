@@ -1,5 +1,9 @@
 function SystemInfoBO(dao) {
   return {
+    getAll: function() {
+      return dao.getAll();
+    },
+
     createSystemInfo: function(systemInfo) {
       return dao.createSystemInfo(systemInfo);
     },
@@ -10,6 +14,10 @@ function SystemInfoBO(dao) {
 
     getById: function(id) {
       return dao.getById(id);
+    },
+
+    deleteById: function(id) {
+      return dao.deleteById(id);
     }
   };
 }

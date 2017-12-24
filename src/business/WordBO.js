@@ -1,8 +1,10 @@
 var Promise       = require('promise');
+var logger        = require('../config/logger');
 
 function WordBO(dao) {
   return {
     getDictionary: function(systemInfoId, language) {
+      logger.info('Getting the dictionary for ', systemInfoId, language);
       return dao.getDictionary(systemInfoId, language);
     },
 

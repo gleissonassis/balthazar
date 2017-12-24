@@ -10,15 +10,16 @@ describe('business > DocumentBO', function(){
 
     var createDocumentStub = sinon.stub(documentDAO, 'createDocument');
     var updateDocumentStub = sinon.stub(documentDAO, 'updateDocument');
-    var getByRefAndUrlStub = sinon.stub(documentDAO, 'getByRefAndUrl');
+    var getByReferenceStub = sinon.stub(documentDAO, 'getByReference');
 
-    getByRefAndUrlStub
-      .withArgs('SYSTEM_ID', 'DOCUMENT_ID', '/relative/path/to/document?id=DOCUMENT_ID')
+    getByReferenceStub
+      .withArgs('SYSTEM_ID', 'Document Group', 'DOCUMENT_ID')
       .returns(Promise.resolve(null));
 
     var expectedDocument = {
       systemInfoId: 'SYSTEM_ID',
       title: 'Title of the document',
+      group: 'Document Group',
       language: 'en-us',
       reference: 'DOCUMENT_ID',
       url: '/relative/path/to/document?id=DOCUMENT_ID',
@@ -42,7 +43,7 @@ describe('business > DocumentBO', function(){
       .then(function(r) {
         expect(r.id).to.be.equal('DOCUMENT_ID');
         expect(createDocumentStub.callCount).to.be.equal(1);
-        expect(getByRefAndUrlStub.callCount).to.be.equal(1);
+        expect(getByReferenceStub.callCount).to.be.equal(1);
         expect(updateDocumentStub.callCount).to.be.equal(0);
       });
   });
@@ -52,11 +53,12 @@ describe('business > DocumentBO', function(){
 
     var createDocumentStub = sinon.stub(documentDAO, 'createDocument');
     var updateDocumentStub = sinon.stub(documentDAO, 'updateDocument');
-    var getByRefAndUrlStub = sinon.stub(documentDAO, 'getByRefAndUrl');
+    var getByReferenceStub = sinon.stub(documentDAO, 'getByReference');
 
     var expectedDocument = {
       systemInfoId: 'SYSTEM_ID',
       title: 'Title of the document',
+      group: 'Document Group',
       language: 'en-us',
       reference: 'DOCUMENT_ID_2',
       url: '/relative/path/to/document?id=DOCUMENT_ID_2',
@@ -70,8 +72,8 @@ describe('business > DocumentBO', function(){
     var resultDocument = expectedDocument;
     resultDocument.id = 'DOCUMENT_ID';
 
-    getByRefAndUrlStub
-      .withArgs('SYSTEM_ID', 'DOCUMENT_ID_2','/relative/path/to/document?id=DOCUMENT_ID_2')
+    getByReferenceStub
+      .withArgs('SYSTEM_ID', 'Document Group', 'DOCUMENT_ID_2')
       .returns(Promise.resolve(resultDocument));
 
     updateDocumentStub
@@ -84,7 +86,7 @@ describe('business > DocumentBO', function(){
       .then(function(r) {
         expect(r.id).to.be.equal('DOCUMENT_ID');
         expect(createDocumentStub.callCount).to.be.equal(0);
-        expect(getByRefAndUrlStub.callCount).to.be.equal(1);
+        expect(getByReferenceStub.callCount).to.be.equal(1);
         expect(updateDocumentStub.callCount).to.be.equal(1);
       });
   });
