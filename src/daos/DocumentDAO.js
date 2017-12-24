@@ -1,5 +1,6 @@
 var connection  = require('../config/mysql');
 var logger      = require('../config/logger');
+var _           = require('underscore');
 var Promise     = require('promise');
 
 function DocumentDAO() {
@@ -90,30 +91,44 @@ function DocumentDAO() {
     },
 
     searchDocuments: function(systemInfoId, q) {
+      var self = this;
+
       return new Promise(function(resolve, reject) {
         var words = q.split(' ');
-        var query = 'SELECT DISTINCT D.* FROM Document D ' +
-                    'INNER JOIN `Index` I ON D.id = I.documentId ' +
-                    'INNER JOIN Word W on W.id = I.wordId ' +
-                    'WHERE 1 = 1';
 
-        words.forEach(function(word) {
-          query += ' AND ('+
+        var query = '';
+
+        words.forEach(function(word, index) {
+          /*query += ' AND ('+
                    'W.word LIKE ' + connection.escape('%' + word + '%') + ' ' +
                    ' OR '+
                    ' W.phonem = ' +
                    'IF(W.language=\'pt-br\', '+
-                   'phonembr(' + connection.escape(word) + '), SOUNDEX(' + connection.escape(word) + ')))';
+                   'phonembr(' + connection.escape(word) + '), SOUNDEX(' + connection.escape(word) + ')))';*/
+         if (index > 0) {
+           query += ' UNION ALL ';
+         }
+         query += 'SELECT DISTINCT I.documentId, ' + connection.escape('%' + word + '%') + ' as word ' +
+                     'FROM Word W INNER JOIN `Index` I ON I.wordId = W.id ' +
+                     'WHERE W.word LIKE '+ connection.escape('%' + word + '%');
         });
-
-        query += ' ORDER BY D.modifiedAt DESC, D.createdAt DESC';
 
         connection.query(query,
           function(err, result) {
               if (err) {
                 reject(connection.parseError(err));
               } else {
-                resolve(result);
+                var groups = _.groupBy(result, 'word');
+                var a = [];
+                for (var k in groups) {
+                  a.push(groups[k].map(function(i) {
+                    return i.documentId;
+                  }));
+                }
+
+                self.getByIds(_.intersection.apply(_, a))
+                  .then(resolve)
+                  .catch(reject);
               }
             });
       });
@@ -129,6 +144,21 @@ function DocumentDAO() {
                 reject(connection.parseError(err));
               } else {
                 resolve(result && result.length ? result[0] : null);
+              }
+            }
+          );
+      });
+    },
+
+    getByIds: function(ids) {
+      return new Promise(function(resolve, reject) {
+        connection.query(
+          'SELECT * FROM Document WHERE id in (' + ids.join(',') + ')',
+          function(err, result) {
+              if (err) {
+                reject(connection.parseError(err));
+              } else {
+                resolve(result);
               }
             }
           );

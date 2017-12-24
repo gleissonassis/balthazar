@@ -16,7 +16,7 @@ function IndexerBO(dependencies) {
     parseDocument: function(document, stopWords) {
       var words = document
       .replace(/(?:\r\n|\r|\n)/g, ' ')
-      .replace(/['.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
+      .replace(/[“”‘’"'.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
       .replace(/\s{2,}/g, ' ')
       .toLowerCase()
       .split(' ');

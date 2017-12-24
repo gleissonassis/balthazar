@@ -1,4 +1,5 @@
 var Promise     = require('promise');
+var logger      = require('../config/logger');
 
 function DocumentBO(dao) {
   return {
@@ -27,6 +28,7 @@ function DocumentBO(dao) {
     },
 
     searchDocuments: function(systemInfoId, query) {
+      logger.info('Searching documents ', systemInfoId, query);
       return dao.searchDocuments(systemInfoId, query);
     },
 
